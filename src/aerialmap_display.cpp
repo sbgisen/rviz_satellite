@@ -68,6 +68,11 @@ AerialMapDisplay::AerialMapDisplay() : Display()
                                       this, SLOT(updateDrawUnder()));
   draw_under_property_->setShouldBeSaved(true);
   draw_under_ = draw_under_property_->getValue().toBool();
+  realtime_origin_update_property_ = new BoolProperty("Realtime Origin Update", false,
+                                      "Update option, determines to update the map origin with the latest GNSS data.",
+                                      this, SLOT(updateRealtimeOriginUpdate()));
+  realtime_origin_update_property_->setShouldBeSaved(true);
+  realtime_origin_update_ = realtime_origin_update_property_->getBool();
 
   // properties for map
   tile_url_property_ =
@@ -190,6 +195,11 @@ void AerialMapDisplay::updateDrawUnder()
   }
 
   triggerSceneAssembly();
+}
+
+void AerialMapDisplay::updateRealtimeOriginUpdate()
+{
+  realtime_origin_update_ = realtime_origin_update_property_->getBool();
 }
 
 void AerialMapDisplay::updateTileUrl()
@@ -396,12 +406,12 @@ void AerialMapDisplay::updateCenterTile(sensor_msgs::NavSatFixConstPtr const& ms
   TileId const new_center_tile_id{ tile_url_, tile_coordinates, zoom_ };
   bool const center_tile_changed = (!center_tile_ || !(new_center_tile_id == *center_tile_));
 
-  // if (not center_tile_changed)
-  // {
-  //   // TODO: Maybe we should update the transform here even if the center tile did not change?
-  //   // The localization might have been updated.
-  //   return;
-  // }
+  if (!realtime_origin_update_&& !center_tile_changed)
+  {
+    // TODO: Maybe we should update the transform here even if the center tile did not change?
+    // The localization might have been updated.
+    return;
+  }
 
   ROS_DEBUG_NAMED("rviz_satellite", "Updating center tile");
 
