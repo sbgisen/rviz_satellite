@@ -396,12 +396,12 @@ void AerialMapDisplay::updateCenterTile(sensor_msgs::NavSatFixConstPtr const& ms
   TileId const new_center_tile_id{ tile_url_, tile_coordinates, zoom_ };
   bool const center_tile_changed = (!center_tile_ || !(new_center_tile_id == *center_tile_));
 
-  if (not center_tile_changed)
-  {
-    // TODO: Maybe we should update the transform here even if the center tile did not change?
-    // The localization might have been updated.
-    return;
-  }
+  // if (not center_tile_changed)
+  // {
+  //   // TODO: Maybe we should update the transform here even if the center tile did not change?
+  //   // The localization might have been updated.
+  //   return;
+  // }
 
   ROS_DEBUG_NAMED("rviz_satellite", "Updating center tile");
 
