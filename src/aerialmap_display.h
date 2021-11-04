@@ -62,6 +62,7 @@ protected Q_SLOTS:
   void updateAlpha();
   void updateTopic();
   void updateDrawUnder();
+  void updateRealtimeOriginUpdate();
   void updateTileUrl();
   void updateZoom();
   void updateBlocks();
@@ -156,11 +157,14 @@ protected:
   IntProperty* blocks_property_;
   FloatProperty* alpha_property_;
   Property* draw_under_property_;
+  BoolProperty* realtime_origin_update_property_;
 
   /// the alpha value of the tile's material
   float alpha_;
   /// determines which render queue to use
   bool draw_under_;
+  /// determines to update the map origin with the latest GNSS data
+  bool realtime_origin_update_;
   /// the URL of the tile server to use
   std::string tile_url_;
   /// the zoom to use (Mercator)
