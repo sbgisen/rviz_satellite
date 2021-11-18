@@ -47,13 +47,15 @@ namespace rviz
  * Splitting this transform lookup is necessary to mitigate frame jitter.
  */
 
-std::string const AerialMapDisplay::MAP_FRAME = "map";
 
 AerialMapDisplay::AerialMapDisplay() : Display()
 {
   topic_property_ =
-      new RosTopicProperty("Topic", "", QString::fromStdString(ros::message_traits::datatype<sensor_msgs::NavSatFix>()),
+      new RosTopicProperty("NavSatFix Topic", "", QString::fromStdString(ros::message_traits::datatype<sensor_msgs::NavSatFix>()),
                            "sensor_msgs::NavSatFix topic to subscribe to.", this, SLOT(updateTopic()));
+  imu_topic_property_ =
+      new RosTopicProperty("Imu Topic", "", QString::fromStdString(ros::message_traits::datatype<sensor_msgs::Imu>()),
+                           "sensor_msgs::Imu topic to subscribe to.", this, SLOT(updateImuTopic()));
 
   alpha_property_ =
       new FloatProperty("Alpha", 0.7, "Amount of transparency to apply to the map.", this, SLOT(updateAlpha()));
@@ -93,6 +95,9 @@ AerialMapDisplay::AerialMapDisplay() : Display()
   blocks_property_->setMax(MAX_BLOCKS);
   blocks_property_->setShouldBeSaved(true);
   blocks_ = blocks_property_->getInt();
+
+  // Note that x, y, and z has been initialized to 0.0 by the constructor
+  map_orientation_.w = 1.0;
 }
 
 AerialMapDisplay::~AerialMapDisplay()
@@ -108,11 +113,13 @@ void AerialMapDisplay::onEnable()
 
   createTileObjects();
   subscribe();
+  subscribeImu();
 }
 
 void AerialMapDisplay::onDisable()
 {
   unsubscribe();
+  unsubscribeImu();
   clearAll();
 }
 
@@ -140,9 +147,38 @@ void AerialMapDisplay::subscribe()
   }
 }
 
+void AerialMapDisplay::subscribeImu()
+{
+  if (!isEnabled())
+  {
+    return;
+  }
+
+  if (!imu_topic_property_->getTopic().isEmpty())
+  {
+    try
+    {
+      ROS_INFO("Subscribing to %s", imu_topic_property_->getTopicStd().c_str());
+      imu_sub_ =
+          update_nh_.subscribe(imu_topic_property_->getTopicStd(), 1, &AerialMapDisplay::imuCallback, this);
+
+      setStatus(StatusProperty::Ok, "Imu Topic", "OK");
+    }
+    catch (ros::Exception& e)
+    {
+      setStatus(StatusProperty::Error, "Imu Topic", QString("Error subscribing: ") + e.what());
+    }
+  }
+}
+
 void AerialMapDisplay::unsubscribe()
 {
   navsat_fix_sub_.shutdown();
+}
+
+void AerialMapDisplay::unsubscribeImu()
+{
+  imu_sub_.shutdown();
 }
 
 void AerialMapDisplay::updateAlpha()
@@ -311,6 +347,20 @@ void AerialMapDisplay::updateTopic()
   subscribe();
 }
 
+void AerialMapDisplay::updateImuTopic()
+{
+  // if the NavSat topic changes, we reset everything
+
+  if (!isEnabled())
+  {
+    return;
+  }
+
+  unsubscribeImu();
+  subscribeImu();
+}
+
+
 void AerialMapDisplay::clearAll()
 {
   ref_fix_ = nullptr;
@@ -389,9 +439,35 @@ void AerialMapDisplay::update(float, float)
 
 void AerialMapDisplay::navFixCallback(sensor_msgs::NavSatFixConstPtr const& msg)
 {
-  updateCenterTile(msg);
 
-  setStatus(StatusProperty::Ok, "Message", "NavSatFix message received");
+  if (tf_buffer_->canTransform(msg->header.frame_id, context_->getFrameManager()->getFixedFrame(), msg->header.stamp, ros::Duration(1.0)))
+  {
+    updateCenterTile(msg);
+
+    setStatus(StatusProperty::Ok, "Message", "NavSatFix message received");
+
+    static tf2_ros::TransformBroadcaster br;
+    geometry_msgs::TransformStamped transformStamped;
+
+    transformStamped.header.stamp = msg->header.stamp;
+    transformStamped.header.frame_id = msg->header.frame_id;
+    transformStamped.child_frame_id = MAP_FRAME;
+    transformStamped.transform.rotation = map_orientation_;
+
+    br.sendTransform(transformStamped);
+  }
+  else
+  {
+    setStatus(StatusProperty::Warn, "Message", "The frame id referenced by the topic does not exist in tf_tree");
+  }
+}
+
+void AerialMapDisplay::imuCallback(sensor_msgs::ImuConstPtr const& msg)
+{
+  map_orientation_.x = - msg->orientation.x;
+  map_orientation_.y = - msg->orientation.y;
+  map_orientation_.z = - msg->orientation.z;
+  map_orientation_.w = msg->orientation.w;
 }
 
 void AerialMapDisplay::updateCenterTile(sensor_msgs::NavSatFixConstPtr const& msg)
@@ -648,25 +724,6 @@ void AerialMapDisplay::transformTileToMapFrame()
   //   frame is used by OSM and Google Maps, see https://en.wikipedia.org/wiki/Web_Mercator_projection and
   //   https://developers.google.com/maps/documentation/javascript/coordinates.
 
-  // translation of NavSatFix frame w.r.t. the map frame
-  // NOTE: due to ENU convention, orientation is not needed, the tiles are rigidly attached to ENU
-  Ogre::Vector3 t_navsat_map;
-
-  try
-  {
-    // Use a real TfBuffer for looking up this transform. The FrameManager only supplies transform to/from the
-    // currently selected RViz fixed-frame, which is of no help here.
-    auto const tf_navsat_map =
-        tf_buffer_->lookupTransform(MAP_FRAME, ref_fix_->header.frame_id, ref_fix_->header.stamp, ros::Duration(0.1));
-    auto const tf_pos = tf_navsat_map.transform.translation;
-    t_navsat_map = Ogre::Vector3(tf_pos.x, tf_pos.y, tf_pos.z);
-  }
-  catch (tf2::TransformException const& ex)
-  {
-    setStatus(StatusProperty::Error, "Transform", QString::fromStdString(ex.what()));
-    return;
-  }
-
   // FIXME: note the <double> template! this is different from center_tile_.coord, otherwise we could just use that
   // since center_tile_ and ref_fix_ are in sync
   auto const ref_fix_tile_coords = fromWGSCoordinate<double>({ ref_fix_->latitude, ref_fix_->longitude }, zoom_);
@@ -686,7 +743,7 @@ void AerialMapDisplay::transformTileToMapFrame()
   auto const t_centertile_navsat =
       Ogre::Vector3(center_tile_offset_x * tile_w_h_m, center_tile_offset_y * tile_w_h_m, 0);
 
-  t_centertile_map_ = t_navsat_map - t_centertile_navsat;
+  t_centertile_map_ = - t_centertile_navsat;
 }
 
 void AerialMapDisplay::transformMapTileToFixedFrame()
@@ -729,6 +786,7 @@ void AerialMapDisplay::reset()
   Display::reset();
   // unsubscribe, clear, resubscribe
   updateTopic();
+  updateImuTopic();
 }
 
 }  // namespace rviz
