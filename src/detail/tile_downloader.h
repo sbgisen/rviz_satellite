@@ -116,7 +116,18 @@ public slots:
       return;
     }
 
-    callback(tile_id, reader.read());
+    QImage tile_img = reader.read();
+
+    // Crop the image to 256x256 pixels
+    int target_size = 256;
+    if (tile_img.width() > target_size || tile_img.height() > target_size)
+    {
+      int cx = std::floor(0.5 * (tile_img.width() - target_size));
+      int cy = std::floor(0.5 * (tile_img.height() - target_size));
+      tile_img = tile_img.copy(cx, cy, target_size, target_size);
+    }
+
+    callback(tile_id, tile_img);
 
     reply->deleteLater();
   }

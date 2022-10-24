@@ -43,7 +43,7 @@ Visualization Manager:
       Draw Behind: false
       Enabled: true
       Name: AerialMapDisplay
-      Object URI: https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}.png
+      Object URI:  https://maps.googleapis.com/maps/api/staticmap?maptype=satellite&center={lat},{lon}&zoom={z}&size=356x356&key=
       Topic: /gps/fix
       Value: true
       Zoom: 18
