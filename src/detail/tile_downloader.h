@@ -115,20 +115,7 @@ public slots:
       ROS_DEBUG_STREAM_NAMED("rviz_satellite", "Unable to decode image at " << reply->request().url().toString().toLatin1().data());
       return;
     }
-
-    QImage tile_img = reader.read();
-
-    // Crop the image to 256x256 pixels
-    int target_size = 256;
-    if (tile_img.width() > target_size || tile_img.height() > target_size)
-    {
-      int cx = std::floor(0.5 * (tile_img.width() - target_size));
-      int cy = std::floor(0.5 * (tile_img.height() - target_size));
-      tile_img = tile_img.copy(cx, cy, target_size, target_size);
-    }
-
-    callback(tile_id, tile_img);
-
+    callback(tile_id, reader.read());
     reply->deleteLater();
   }
 };
