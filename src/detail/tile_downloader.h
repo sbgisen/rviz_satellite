@@ -112,7 +112,7 @@ public slots:
     QImageReader reader(reply);
     if (!reader.canRead())
     {
-      ROS_ERROR_STREAM("Unable to decode image at " << reply->request().url().toString().toLatin1().data());
+      ROS_DEBUG_STREAM_NAMED("rviz_satellite", "Unable to decode image at " << reply->request().url().toString().toLatin1().data());
       return;
     }
 
