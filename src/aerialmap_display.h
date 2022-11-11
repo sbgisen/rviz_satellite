@@ -198,7 +198,7 @@ protected:
   /// translation of the center-tile w.r.t. the map frame
   Ogre::Vector3 t_centertile_map_{ Ogre::Vector3::ZERO };
   /// the map frame, rigidly attached to the world with ENU convention - see https://www.ros.org/reps/rep-0105.html#map
-  const std::string MAP_FRAME{ "map" };
+  const std::string MAP_FRAME{ "rviz_satellite" };
   // // IMU-based orientation to rotate the map
   geometry_msgs::Quaternion map_orientation_;
 
