@@ -14,11 +14,8 @@ limitations under the License. */
 
 #pragma once
 
-#include <string>
-#include <vector>
-
-#include <boost/optional.hpp>
-
+#include <OGRE/OgreMaterial.h>
+#include <OGRE/OgreVector3.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <ros/ros.h>
 #include <ros/time.h>
@@ -27,8 +24,9 @@ limitations under the License. */
 #include <sensor_msgs/NavSatFix.h>
 #include <tf2_ros/buffer.h>
 
-#include <OGRE/OgreMaterial.h>
-#include <OGRE/OgreVector3.h>
+#include <boost/optional.hpp>
+#include <string>
+#include <vector>
 
 #include "coordinates.h"
 #include "ogre_tile.h"
@@ -172,9 +170,9 @@ protected:
    * Checks how may tiles were loaded successfully, and sets the status accordingly.
    */
   void checkRequestErrorRate();
-  
+
   /**
-   * Called periodically to update TF_FRAME position references. 
+   * Called periodically to update TF_FRAME position references.
    */
   void tfReferencePeriodicUpdate(const ros::TimerEvent&);
 
@@ -247,6 +245,7 @@ protected:
   double z_offset_;
   /// Offset of the tiles in yaw angle
   double yaw_offset_;
+  bool image_ready_;
 
   // tile management
   /// whether we need to re-query and re-assemble the tiles
@@ -264,7 +263,7 @@ protected:
 
   /// buffer for tf lookups not related to fixed-frame
   std::shared_ptr<tf2_ros::Buffer const> tf_buffer_{ nullptr };
-  
+
   /// timeout for periodic TF_FRAME reference update
   ros::Duration tf_reference_update_duration_;
   /// timer that updates the reference position when using TF_FRAME references
