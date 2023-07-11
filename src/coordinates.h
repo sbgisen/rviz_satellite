@@ -83,8 +83,8 @@ template <typename NumericType = int>
 WGSCoordinate toWGSCoordinate(TileCoordinateGeneric<NumericType> coord, int zoom)
 {
   WGSCoordinate ret{ 0, 0 };
-  ret.lon = coord.x / std::pow(2.0, zoom) * 360.0 - 180;
-  double n = M_PI - 2.0 * M_PI * (1 + coord.y) / std::pow(2.0, zoom);
+  ret.lon = (coord.x + 0.5) / std::pow(2.0, zoom) * 360.0 - 180;
+  double n = M_PI - 2.0 * M_PI * (1 + (coord.y + 0.5)) / std::pow(2.0, zoom);
   ret.lat = 180.0 / M_PI * std::atan(0.5 * (std::exp(n) - std::exp(-n)));
   return ret;
 }
