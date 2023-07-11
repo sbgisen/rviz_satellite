@@ -747,21 +747,23 @@ bool AerialMapDisplay::updateCenterTile(sensor_msgs::NavSatFixConstPtr const& ms
   TileCoordinate const tile_coordinates = fromWGSCoordinate<int>(reference_wgs, zoom_);
   TileId const new_center_tile_id{ tile_url_, tile_coordinates, zoom_ };
   bool const center_tile_changed = (!center_tile_ || !(new_center_tile_id == *center_tile_));
-
-  if (not center_tile_changed)
+  if (center_tile_changed)
   {
     // TODO: Maybe we should update the transform here even if the center tile did not change?
     // The localization might have been updated.
+    ROS_DEBUG_NAMED("rviz_satellite", "Updating center tile to (%i, %i)", tile_coordinates.x, tile_coordinates.y);
+    center_tile_ = new_center_tile_id;
+    requestTileTextures();
+    image_ready_ = true;
+  }
+  if (image_ready_ == false)
+  {
     return false;
   }
 
-  ROS_DEBUG_NAMED("rviz_satellite", "Updating center tile to (%i, %i)", tile_coordinates.x, tile_coordinates.y);
-
-  center_tile_ = new_center_tile_id;
   ref_coords_ = reference_wgs;
   ref_fix_ = msg;
 
-  requestTileTextures();
   transformTileToReferenceFrame();
   return true;
 }
