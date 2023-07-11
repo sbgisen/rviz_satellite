@@ -1115,6 +1115,9 @@ void AerialMapDisplay::transformTileToMapFrame()
   center_tile_pose_.header.frame_id = map_frame_;
   center_tile_pose_.header.stamp = ref_fix_->header.stamp;
   tf2::toMsg(t_navsat_map - t_centertile_navsat, center_tile_pose_.pose.position);
+  tf2::Quaternion t_orientation_imu;
+  t_orientation_imu.setEulerZYX(yaw_offset_, 0, 0);
+  center_tile_pose_.pose.orientation = tf2::toMsg(t_orientation_imu);
 }
 
 void AerialMapDisplay::transformTileToUtmFrame()

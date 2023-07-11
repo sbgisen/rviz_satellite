@@ -245,6 +245,8 @@ protected:
   std::string z_reference_frame_;
   /// Offset of the tiles in Z axis (relative to map/utm)
   double z_offset_;
+  /// Offset of the tiles in yaw angle
+  double yaw_offset_;
 
   // tile management
   /// whether we need to re-query and re-assemble the tiles
