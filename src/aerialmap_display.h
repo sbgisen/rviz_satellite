@@ -244,7 +244,7 @@ protected:
   /// Offset of the tiles in Z axis (relative to map/utm)
   double z_offset_;
   /// Offset of the tiles in yaw angle
-  double yaw_offset_;
+  tf2::Quaternion imu_orientation_;
   bool image_ready_;
 
   // tile management

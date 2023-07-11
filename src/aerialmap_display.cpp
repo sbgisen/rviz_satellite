@@ -60,15 +60,15 @@ std::unordered_map<MapTransformType, QString> mapTransformTypeStrings = {
 
 AerialMapDisplay::AerialMapDisplay() : Display()
 {
-  center_tile_pose_.pose.orientation.x = 0;
-  center_tile_pose_.pose.orientation.y = 0;
-  center_tile_pose_.pose.orientation.z = 0;
-  center_tile_pose_.pose.orientation.w = 1;
+  imu_orientation_.setX(0);
+  imu_orientation_.setY(0);
+  imu_orientation_.setZ(0);
+  imu_orientation_.setW(1);
   image_ready_ = false;
 
-  topic_property_ =
-      new RosTopicProperty("NavSatFix Topic", "", QString::fromStdString(ros::message_traits::datatype<sensor_msgs::NavSatFix>()),
-                           "sensor_msgs::NavSatFix topic to subscribe to.", this, SLOT(updateTopic()));
+  topic_property_ = new RosTopicProperty(
+      "NavSatFix Topic", "", QString::fromStdString(ros::message_traits::datatype<sensor_msgs::NavSatFix>()),
+      "sensor_msgs::NavSatFix topic to subscribe to.", this, SLOT(updateTopic()));
   imu_topic_property_ =
       new RosTopicProperty("Imu Topic", "", QString::fromStdString(ros::message_traits::datatype<sensor_msgs::Imu>()),
                            "sensor_msgs::Imu topic to subscribe to.", this, SLOT(updateImuTopic()));
@@ -223,8 +223,7 @@ void AerialMapDisplay::subscribeImu()
     try
     {
       ROS_INFO("Subscribing to %s", imu_topic_property_->getTopicStd().c_str());
-      imu_sub_ =
-          update_nh_.subscribe(imu_topic_property_->getTopicStd(), 1, &AerialMapDisplay::imuCallback, this);
+      imu_sub_ = update_nh_.subscribe(imu_topic_property_->getTopicStd(), 1, &AerialMapDisplay::imuCallback, this);
 
       setStatus(StatusProperty::Ok, "Imu Topic", "OK");
     }
@@ -730,16 +729,10 @@ void AerialMapDisplay::navFixCallback(sensor_msgs::NavSatFixConstPtr const& msg)
 
 void AerialMapDisplay::imuCallback(sensor_msgs::ImuConstPtr const& msg)
 {
-  // static tf2_ros::TransformBroadcaster br;
-  // geometry_msgs::TransformStamped transformStamped;
-  // transformStamped.header.stamp = ros::Time::now();
-  // transformStamped.header.frame_id = MAP_FRAME;
-  // transformStamped.child_frame_id = "map_fixed";
-  // transformStamped.transform.rotation.x = msg->orientation.x;
-  // transformStamped.transform.rotation.y = msg->orientation.y;
-  // transformStamped.transform.rotation.z = msg->orientation.z;
-  // transformStamped.transform.rotation.w = msg->orientation.w;
-  // br.sendTransform(transformStamped);
+  imu_orientation_.setX(msg->orientation.x);
+  imu_orientation_.setY(msg->orientation.y);
+  imu_orientation_.setZ(msg->orientation.z);
+  imu_orientation_.setW(msg->orientation.w);
 }
 
 bool AerialMapDisplay::updateCenterTile(sensor_msgs::NavSatFixConstPtr const& msg)
@@ -1109,15 +1102,19 @@ void AerialMapDisplay::transformTileToMapFrame()
   double const tile_w_h_m = getTileWH(ref_coords_->lat, zoom_);
   ROS_DEBUG_NAMED("rviz_satellite", "Tile resolution is %.1fm", tile_w_h_m);
 
+  tf2::Matrix3x3 t_matrix_imu(imu_orientation_);
+  double roll, pitch, yaw;
+  t_matrix_imu.getRPY(roll, pitch, yaw);
+  tf2::Quaternion t_orientation_imu;
+  t_orientation_imu.setEulerZYX(-yaw, 0, 0);
+  center_tile_pose_.pose.orientation = tf2::toMsg(t_orientation_imu);
+  t_matrix_imu.setRPY(0, 0, -yaw);
   // translation of the center-tile w.r.t. the NavSatFix frame
   tf2::Vector3 t_centertile_navsat = { center_tile_offset_x * tile_w_h_m, center_tile_offset_y * tile_w_h_m, 0 };
-
+  t_centertile_navsat = t_matrix_imu * t_centertile_navsat;
   center_tile_pose_.header.frame_id = map_frame_;
   center_tile_pose_.header.stamp = ref_fix_->header.stamp;
   tf2::toMsg(t_navsat_map - t_centertile_navsat, center_tile_pose_.pose.position);
-  tf2::Quaternion t_orientation_imu;
-  t_orientation_imu.setEulerZYX(yaw_offset_, 0, 0);
-  center_tile_pose_.pose.orientation = tf2::toMsg(t_orientation_imu);
 }
 
 void AerialMapDisplay::transformTileToUtmFrame()
