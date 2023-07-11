@@ -23,6 +23,7 @@ limitations under the License. */
 #include <ros/ros.h>
 #include <ros/time.h>
 #include <rviz/display.h>
+#include <sensor_msgs/Imu.h>
 #include <sensor_msgs/NavSatFix.h>
 #include <tf2_ros/buffer.h>
 
@@ -77,6 +78,7 @@ public:
 protected Q_SLOTS:
   void updateAlpha();
   void updateTopic();
+  void updateImuTopic();
   void updateDrawUnder();
   void updateTileUrl();
   void updateZoom();
@@ -97,11 +99,18 @@ protected:
 
   virtual void subscribe();
   virtual void unsubscribe();
+  virtual void subscribeImu();
+  virtual void unsubscribeImu();
 
   /**
    * GPS topic callback
    */
   void navFixCallback(sensor_msgs::NavSatFixConstPtr const& msg);
+
+  /**
+   * IMU topic callback
+   */
+  void imuCallback(sensor_msgs::ImuConstPtr const& msg);
 
   /**
    * Load images to cache (non-blocking)
@@ -189,8 +198,12 @@ protected:
   /// the subscriber for the NavSatFix topic
   ros::Subscriber navsat_fix_sub_;
 
+  /// the subscriber got the Imu topic
+  ros::Subscriber imu_sub_;
+
   // properties
   RosTopicProperty* topic_property_;
+  RosTopicProperty* imu_topic_property_;
   StringProperty* tile_url_property_;
   IntProperty* zoom_property_;
   IntProperty* blocks_property_;
