@@ -127,6 +127,11 @@ AerialMapDisplay::AerialMapDisplay() : Display()
   draw_under_property_->setShouldBeSaved(true);
   draw_under_ = draw_under_property_->getValue().toBool();
 
+  rough_update_property_ =
+      new Property("Rough Update", false, "Only update when the tile block changes.", this, SLOT(updateRoughUpdate()));
+  rough_update_property_->setShouldBeSaved(true);
+  rough_update_ = rough_update_property_->getValue().toBool();
+
   // properties for map
   tile_url_property_ =
       new StringProperty("Object URI", "", "URL from which to retrieve map tiles.", this, SLOT(updateTileUrl()));
@@ -294,6 +299,10 @@ void AerialMapDisplay::updateDrawUnder()
   }
 
   triggerSceneAssembly();
+}
+void AerialMapDisplay::updateRoughUpdate()
+{
+  rough_update_ = rough_update_property_->getValue().toBool();
 }
 
 void AerialMapDisplay::updateTileUrl()
@@ -806,7 +815,7 @@ bool AerialMapDisplay::updateCenterTile(sensor_msgs::NavSatFixConstPtr const& ms
     requestTileTextures();
     image_ready_ = true;
   }
-  if (image_ready_ == false)
+  else if (rough_update_ || !image_ready_)
   {
     return false;
   }
@@ -1082,9 +1091,6 @@ void AerialMapDisplay::transformTileToMapFrame()
       return;
     }
   }
-  ROS_WARN("tf_map2navsat: %f %f %f", tf_map2navsat.transform.translation.x, tf_map2navsat.transform.translation.y,
-           tf_map2navsat.transform.translation.z);
-
   // FIXME: note the <double> template! this is different from center_tile_.coord, otherwise we could just use that
   // since center_tile_ and ref_fix_ are in sync
   auto const ref_fix_tile_coords = fromWGSCoordinate<double>(*ref_coords_, zoom_);

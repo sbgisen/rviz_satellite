@@ -78,6 +78,7 @@ protected Q_SLOTS:
   void updateTopic();
   void updateImuTopic();
   void updateDrawUnder();
+  void updateRoughUpdate();
   void updateTileUrl();
   void updateZoom();
   void updateBlocks();
@@ -207,6 +208,7 @@ protected:
   IntProperty* blocks_property_;
   FloatProperty* alpha_property_;
   Property* draw_under_property_;
+  Property* rough_update_property_;
   EnumProperty* map_transform_type_property_;
   TfFrameProperty* map_frame_property_;
   TfFrameProperty* utm_frame_property_;
@@ -219,6 +221,8 @@ protected:
   float alpha_;
   /// determines which render queue to use
   bool draw_under_;
+  /// update satellite-image only when the tile index has changed
+  bool rough_update_;
   /// the URL of the tile server to use
   std::string tile_url_;
   /// the zoom to use (Mercator)
