@@ -1059,15 +1059,13 @@ void AerialMapDisplay::transformTileToMapFrame()
 
   // translation of NavSatFix frame w.r.t. the map frame
   // NOTE: due to ENU convention, orientation is not needed, the tiles are rigidly attached to ENU
-  tf2::Vector3 t_navsat_map;
 
+  geometry_msgs::TransformStamped tf_map2navsat;
   try
   {
     // Use a real TfBuffer for looking up this transform. The FrameManager only supplies transform to/from the
     // currently selected RViz fixed-frame, which is of no help here.
-    auto const tf_navsat_map =
-        tf_buffer_->lookupTransform(map_frame_, ref_fix_->header.frame_id, ref_fix_->header.stamp);
-    tf2::fromMsg(tf_navsat_map.transform.translation, t_navsat_map);
+    tf_map2navsat = tf_buffer_->lookupTransform(map_frame_, ref_fix_->header.frame_id, ros::Time(0));
   }
   catch (tf2::TransformException const& ex)
   {
@@ -1076,9 +1074,7 @@ void AerialMapDisplay::transformTileToMapFrame()
     try
     {
       ros::WallDuration(0.01).sleep();
-      auto const tf_navsat_map =
-          tf_buffer_->lookupTransform(map_frame_, ref_fix_->header.frame_id, ref_fix_->header.stamp);
-      tf2::fromMsg(tf_navsat_map.transform.translation, t_navsat_map);
+      tf_map2navsat = tf_buffer_->lookupTransform(map_frame_, ref_fix_->header.frame_id, ros::Time(0));
     }
     catch (tf2::TransformException const& ex)
     {
@@ -1086,35 +1082,56 @@ void AerialMapDisplay::transformTileToMapFrame()
       return;
     }
   }
+  ROS_WARN("tf_map2navsat: %f %f %f", tf_map2navsat.transform.translation.x, tf_map2navsat.transform.translation.y,
+           tf_map2navsat.transform.translation.z);
 
   // FIXME: note the <double> template! this is different from center_tile_.coord, otherwise we could just use that
   // since center_tile_ and ref_fix_ are in sync
   auto const ref_fix_tile_coords = fromWGSCoordinate<double>(*ref_coords_, zoom_);
+  double const tile_w_h_m = getTileWH(ref_coords_->lat, zoom_);
+  ROS_DEBUG_NAMED("rviz_satellite", "Tile resolution is %.1fm", tile_w_h_m);
 
   // In assembleScene() we shift the AerialMap so that the center tile's left-bottom corner has the coordinate (0,0).
   // Therefore we can calculate the NavSatFix coordinate (in the AerialMap frame) by just looking at the fractional part
   // of the coordinate. That is we calculate the offset from the left bottom corner of the center tile.
-  auto const center_tile_offset_x = ref_fix_tile_coords.x - std::floor(ref_fix_tile_coords.x);
+  const double center_tile_offset_x = (ref_fix_tile_coords.x - std::floor(ref_fix_tile_coords.x)) * tile_w_h_m;
   // In assembleScene() the tiles are created so that the texture is flipped along the y coordinate. Since we want to
   // calculate the positions of the center tile, we also need to flip the texture's v coordinate here.
-  auto const center_tile_offset_y = 1 - (ref_fix_tile_coords.y - std::floor(ref_fix_tile_coords.y));
-
-  double const tile_w_h_m = getTileWH(ref_coords_->lat, zoom_);
-  ROS_DEBUG_NAMED("rviz_satellite", "Tile resolution is %.1fm", tile_w_h_m);
-
+  const double center_tile_offset_y = (1 - (ref_fix_tile_coords.y - std::floor(ref_fix_tile_coords.y))) * tile_w_h_m;
   tf2::Matrix3x3 t_matrix_imu(imu_orientation_);
-  double roll, pitch, yaw;
-  t_matrix_imu.getRPY(roll, pitch, yaw);
-  tf2::Quaternion t_orientation_imu;
-  t_orientation_imu.setEulerZYX(-yaw, 0, 0);
-  center_tile_pose_.pose.orientation = tf2::toMsg(t_orientation_imu);
-  t_matrix_imu.setRPY(0, 0, -yaw);
+  double imu_yaw, imu_pitch, imu_roll;
+  t_matrix_imu.getEulerZYX(imu_yaw, imu_pitch, imu_roll);
+  double yaw_navsat2tile = -imu_yaw;
+  tf2::Vector3 offset_map2navsat;
+  tf2::fromMsg(tf_map2navsat.transform.translation, offset_map2navsat);
+  tf2::Quaternion orientation_map2navsat(tf_map2navsat.transform.rotation.x, tf_map2navsat.transform.rotation.y,
+                                         tf_map2navsat.transform.rotation.z, tf_map2navsat.transform.rotation.w);
+  tf2::Matrix3x3 matrix_map2navsat(orientation_map2navsat);
   // translation of the center-tile w.r.t. the NavSatFix frame
-  tf2::Vector3 t_centertile_navsat = { center_tile_offset_x * tile_w_h_m, center_tile_offset_y * tile_w_h_m, 0 };
-  t_centertile_navsat = t_matrix_imu * t_centertile_navsat;
-  center_tile_pose_.header.frame_id = map_frame_;
-  center_tile_pose_.header.stamp = ref_fix_->header.stamp;
-  tf2::toMsg(t_navsat_map - t_centertile_navsat, center_tile_pose_.pose.position);
+  tf2::Vector3 offset_navsat2tile = { center_tile_offset_x, center_tile_offset_y, 0 };
+  if (!imu_topic_property_->getTopic().isEmpty())
+  {
+    // Fix orientation using imu
+    tf2::Matrix3x3 matrix_navsat2tile;
+    matrix_navsat2tile.setEulerZYX(yaw_navsat2tile, 0, 0);
+    tf2::Quaternion orientation_navsat2tile;
+    orientation_navsat2tile.setEulerZYX(yaw_navsat2tile, 0, 0);
+    tf2::Quaternion orientation_map2tile = orientation_map2navsat * orientation_navsat2tile;
+    center_tile_pose_.header.frame_id = map_frame_;
+    center_tile_pose_.header.stamp = ref_fix_->header.stamp;
+    center_tile_pose_.pose.orientation = tf2::toMsg(orientation_map2tile);
+
+    tf2::Matrix3x3 matrix_map2tile(orientation_map2tile);
+    tf2::Vector3 offset_map2tile = offset_map2navsat - matrix_map2navsat * matrix_navsat2tile * offset_navsat2tile;
+    // tf2::Vector3 offset_map2tile = matrix_navsat2tile * (-offset_navsat2tile);
+    tf2::toMsg(offset_map2tile, center_tile_pose_.pose.position);
+  }
+  else
+  {
+    center_tile_pose_.header.frame_id = map_frame_;
+    center_tile_pose_.header.stamp = ref_fix_->header.stamp;
+    tf2::toMsg(offset_map2navsat - offset_navsat2tile, center_tile_pose_.pose.position);
+  }
 }
 
 void AerialMapDisplay::transformTileToUtmFrame()
