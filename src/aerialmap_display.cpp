@@ -302,7 +302,11 @@ void AerialMapDisplay::updateDrawUnder()
 }
 void AerialMapDisplay::updateRoughUpdate()
 {
-  rough_update_ = rough_update_property_->getValue().toBool();
+  bool next_property = rough_update_property_->getValue().toBool();
+  if(next_property != rough_update_){
+    transformTileToReferenceFrame();
+  }
+  rough_update_ = next_property;
 }
 
 void AerialMapDisplay::updateTileUrl()
@@ -340,6 +344,7 @@ void AerialMapDisplay::updateTileUrl()
   }
 
   requestTileTextures();
+  transformTileToReferenceFrame();
 }
 
 void AerialMapDisplay::updateZoom()
@@ -397,6 +402,7 @@ void AerialMapDisplay::updateBlocks()
 
   createTileObjects();
   requestTileTextures();
+  transformTileToReferenceFrame();
 }
 
 void AerialMapDisplay::updateTopic()
@@ -460,6 +466,7 @@ void AerialMapDisplay::updateMapTransformType()
   if (ref_fix_)
   {
     updateCenterTile(ref_fix_);
+    transformTileToReferenceFrame();
   }
 }
 
@@ -489,6 +496,7 @@ void AerialMapDisplay::updateMapFrame()
   if (ref_fix_)
   {
     updateCenterTile(ref_fix_);
+    transformTileToReferenceFrame();
   }
 }
 
